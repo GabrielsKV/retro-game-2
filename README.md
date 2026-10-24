@@ -1,21 +1,32 @@
 # RetroHub
 
-Real-time retro games for Scrum Masters. Up to 15 people join from any phone or computer by QR code or room code, on any network. 55 games, zero dependencies (plain Node.js, Server-Sent Events).
+Real-time retro and team games for Scrum Masters. Up to 15 people join from any phone or computer by QR code, link or room code, on any network. 56 games, zero dependencies (plain Node.js + Server-Sent Events).
 
 ## Run locally
     node server.js        # http://localhost:8080
 
 ## Deploy to Fly.io
-    fly auth login
-    fly launch --no-deploy --copy-config   # pick a unique app name, keep fly.toml settings
-    fly scale count 1                      # IMPORTANT: one machine only, rooms are in memory
+    fly launch --no-deploy --copy-config
+    fly scale count 1                      # IMPORTANT: exactly one machine
     fly deploy
-Open `https://<your-app>.fly.dev`, click **Create a room**, and show the QR code on screen.
+    fly ips allocate-v4 --shared && fly ips allocate-v6
 
-## Push to GitHub
-    git init && git add . && git commit -m "RetroHub"
-    git branch -M main && git remote add origin <your-repo-url> && git push -u origin main
+## Keep rooms across deploys and restarts (recommended)
+    fly volumes create retro_data --size 1 --region ams
+Then add this to `fly.toml` and redeploy:
 
-## Notes
-- Rooms are in memory; a redeploy or restart clears them. Participants rejoin automatically if the server is still up.
-- Add games in `games.js`: use `T` (cards + dot voting), `S` (rating scale) or `C` (pick one).
+    [mounts]
+      source = "retro_data"
+      destination = "/data"
+
+Rooms are saved to `/data/rooms.json`. Players reconnect automatically after a restart.
+
+## Optional settings (fly secrets / env)
+- `TEAM_NAME` shows your team name on the start page: `fly secrets set TEAM_NAME="Team Falcon"`
+- `SLACK_WEBHOOK_URL` enables "Send to Slack" for the notes: `fly secrets set SLACK_WEBHOOK_URL=https://hooks.slack.com/...`
+
+## Features
+Agendas, action items with owners, Markdown export, discuss timer, card editing and reactions, anonymous or named cards, kick / make host, room password, custom quiz builder, session leaderboard, Two Truths and a Lie, present mode, light/dark theme, sound and confetti.
+
+## Add games
+Edit `games.js`: `T` (cards + dot voting), `S` (rating scale), `C` (pick one), `R` (quiz, poll or who-is-most-likely rounds).

@@ -1,25 +1,19 @@
-# fly.toml app configuration file generated for retro-game-2-g32zfa on 2026-10-24T17:04:41Z
-#
-# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
-#
-
-app = 'retro-game-2-g32zfa'
-primary_region = 'ams'
+app = "retro-game-2"
+primary_region = "ams"
 
 [build]
 
 [env]
-  PORT = '8080'
+  PORT = "8080"
 
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = 'off'
+  auto_stop_machines = false
   auto_start_machines = true
   min_machines_running = 1
 
 [[vm]]
-  memory = '256mb'
-  cpu_kind = 'shared'
+  memory = "256mb"
+  cpu_kind = "shared"
   cpus = 1
-  memory_mb = 256

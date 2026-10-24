@@ -58,9 +58,16 @@ R('thisthat','poll','⚡ This or That','Rapid-fire preferences.',[TT('☕ Coffee
 R('island','poll','🏝️ Desert Island','You are stranded. What do you pick?',[{q:'Pick one item',o:['📡 Satellite phone','🛖 Tent','🎸 Guitar','🎣 Fishing rod','📖 Library']},{q:'Pick one food',o:['🍕 Pizza','🍣 Sushi','🍔 Burger','🥗 Salad']},{q:'Pick a companion',o:['👨‍🍳 Chef','🩺 Doctor','🤡 Comedian','🛠️ Engineer']}]),
 R('likely','who','🏆 Most Likely To','Everyone votes for a teammate.',[W('Who is most likely to become famous?'),W('Who would survive a zombie apocalypse?'),W('Who is most likely to be late to their own wedding?'),W('Who would win a hot-dog eating contest?'),W('Who would forget their laptop charger?'),W('Who would adopt 10 cats?'),W('Who would start a company?'),W('Who would laugh in a serious meeting?')]),
 R('awards','who','🎖️ Team Awards','Hand out awards to teammates.',[W('Funniest person on the team'),W('Most patient'),W('Biggest foodie'),W('Best problem solver'),W('Always up for lunch'),W('Best coffee order')]),
+{id:'2t1l',type:'tl',cat:'Fun & Games',title:'🤥 Two Truths and a Lie',desc:'Write 2 truths and 1 lie, then spot your colleagues\' lies. Points for guessing and for fooling people.',prompt:'Write two truths and one lie about yourself, and mark the lie.'},
 F('caption','🖼️ Caption Contest','Write the funniest caption, then vote.','Caption this: a cat in a sprint planning meeting, looking at the backlog.'),
 F('excuse','🙈 Worst Excuse','Invent the best bad excuse.','Worst excuse for missing the daily standup?'),
 F('teamname','🏷️ Name Our Team','Brainstorm a ridiculous team name.','Suggest a new name for our team.'),
 F('funfact','🎲 Fun Fact','Share something surprising, vote for the most surprising.','Share a fun fact about you that few people know.'),
 F('superpower','🦸 Superpower Pitch','Pitch a superpower that makes work easier.','What superpower would make your job easier?'),
 ];
+module.exports.Q=Q;
+module.exports.AGENDAS=[
+{name:'Classic retro',ids:['weather','sss','actions','roti']},
+{name:'Deep dive',ids:['happy','sail','lean','fist']},
+{name:'Quick 15 min',ids:['mood','wwi','roti']},
+{name:'Team bonding',ids:['funfact','thisthat','triv-gen','kudos']}];

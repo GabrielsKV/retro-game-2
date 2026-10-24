@@ -32,70 +32,98 @@ input,textarea{width:100%;background:var(--bg);border:1px solid var(--bd);border
 .ppl{display:flex;gap:6px;flex-wrap:wrap}.ppl span{background:var(--card);border:1px solid var(--bd);border-radius:99px;padding:3px 11px;font-size:.9rem}.ppl .off{opacity:.45}
 .bar{position:sticky;bottom:8px;display:flex;gap:8px;align-items:center}.bar .pri{flex:1;padding:14px}
 .dots{color:var(--hi);font-weight:800;white-space:nowrap}
+:root[data-theme=dark]{--bg:#0d1716;--card:#16262a;--tx:#ecf3f1;--mu:#93a8a4;--ac:#5eead4;--on:#06201c;--bd:#27403f;--soft:#1d3736}
+:root[data-theme=light]{--bg:#f1f3ee;--card:#fff;--tx:#14201f;--mu:#5d6b69;--ac:#0f766e;--on:#fff;--bd:#d9dfd8;--soft:#e3efec}
+.cf{position:fixed;top:-2rem;font-size:1.8rem;animation:fall 2.6s linear forwards;pointer-events:none}@keyframes fall{to{transform:translateY(110vh) rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.cf{display:none}}select{background:var(--bg);border:1px solid var(--bd);border-radius:10px;padding:9px;width:100%}
 </style></head><body><div id="app"></div>
 <script>
 const $=s=>document.querySelector(s),esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let S=null,es,ses=JSON.parse(localStorage.getItem('retro')||'null');const ui={cat:'All',secs:300,col:0,inv:false};
+let S=null,es,ses=JSON.parse(localStorage.getItem('retro')||'null');const ui={cat:'All',secs:300,col:0,inv:false,big:false,act:null};document.documentElement.dataset.theme=localStorage.getItem('theme')||'';let mute=localStorage.getItem('mute')==='1';
 const post=async(u,b)=>{const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||'Something went wrong');return j};
 const act=(a,o={})=>post('/api/act',{code:ses.code,pid:ses.pid,a,...o}).catch(e=>alert(e.message));
 const save=()=>{localStorage.setItem('retro',JSON.stringify(ses));connect()};
-async function create(){try{const n=$('#nm').value;const j=await post('/api/room',{name:n});ses=j;save()}catch(e){alert(e.message)}}
-async function join(){try{const code=$('#cd').value.trim().toUpperCase();const j=await post('/api/join',{code,name:$('#nm').value,pid:ses&&ses.code===code?ses.pid:undefined});ses={code,pid:j.pid};history.replaceState(0,'','/');save()}catch(e){alert(e.message)}}
-function connect(){es&&es.close();es=new EventSource(`/api/events?code=${ses.code}&pid=${ses.pid}`);es.onmessage=e=>{S=JSON.parse(e.data);render()};
+async function create(){try{const n=$('#nm').value;const j=await post('/api/room',{name:n,pw:$('#pw').value});ses=j;save()}catch(e){alert(e.message)}}
+async function join(){try{const code=$('#cd').value.trim().toUpperCase();const j=await post('/api/join',{code,name:$('#nm').value,pw:$('#pw').value,pid:ses&&ses.code===code?ses.pid:undefined});ses={code,pid:j.pid};history.replaceState(0,'','/');save()}catch(e){alert(e.message)}}
+function connect(){es&&es.close();es=new EventSource(`/api/events?code=${ses.code}&pid=${ses.pid}`);es.onmessage=e=>{const d=JSON.parse(e.data);if(d.kicked){alert('You were removed from the room.');return leave()}const p=S;S=d;fx(p,d);render()};
   es.onerror=async()=>{const r=await fetch('/api/room?code='+ses.code).catch(()=>null);if(r&&r.status===404)leave()}}
 function leave(){es&&es.close();localStorage.removeItem('retro');ses=S=null;render()}
+const beep=(f,t=.2)=>{if(mute)return;try{const a=new(window.AudioContext||window.webkitAudioContext)(),o=a.createOscillator(),g=a.createGain();o.frequency.value=f;g.gain.value=.08;o.connect(g);g.connect(a.destination);o.start();o.stop(a.currentTime+t)}catch{}};
+const confetti=()=>{const E=['🎉','🎊','✨','⭐'];for(let i=0;i<40;i++){const s=document.createElement('span');s.className='cf';s.textContent=E[i%4];s.style.left=Math.random()*100+'vw';s.style.animationDelay=Math.random()+'s';document.body.appendChild(s);setTimeout(()=>s.remove(),4000)}};
+const fx=(p,d)=>{if(d.rd&&d.rd.show&&d.game.type==='quiz'&&!(p&&p.rd&&p.rd.show&&p.rd.i===d.rd.i))beep(d.rd.my===d.rd.a?880:220,.25);if(d.phase==='results'&&d.board&&(!p||p.phase!=='results'))confetti()};
+const toggleTheme=()=>{const cur=document.documentElement.dataset.theme||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'),n=cur==='dark'?'light':'dark';document.documentElement.dataset.theme=n;localStorage.setItem('theme',n)};
+const toggleMute=()=>{mute=!mute;localStorage.setItem('mute',mute?'1':'0');render()};
+const exp=async()=>(await fetch(`/api/export?code=${ses.code}&pid=${ses.pid}`)).text();
+const dl=async()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([await exp()],{type:'text/markdown'}));a.download='retro-'+S.code+'.md';a.click()};
+const cp=async()=>{try{await navigator.clipboard.writeText(await exp());alert('Copied')}catch{alert('Copy failed. Use Download instead.')}};
+const slack=()=>post('/api/slack',{code:ses.code,pid:ses.pid}).then(()=>alert('Sent to Slack')).catch(e=>alert(e.message));
+const saveAct=()=>{act('action',{text:$('#at').value,owner:$('#ao').value,due:$('#ad').value});ui.act=null;render()};
+const mkQuiz=()=>act('custom',{title:$('#cqt').value,lines:$('#cql').value});
+const editCard=id=>{const c=S.mine.find(x=>x.id===id),t=prompt('Edit card',c.text);if(t&&t.trim())act('edit',{id,text:t})};
+const sendTl=()=>act('tl',{s:[0,1,2].map(i=>$('#t'+i).value),lie:ui.lie??(S.myTl?S.myTl.lie:2)});
 const link=()=>location.origin+'/?r='+S.code;
 const add=()=>{const t=$('#tx').value.trim();if(t){act('add',{col:ui.col,text:t});$('#tx').value=''}};
 function render(){
   const keep={};document.querySelectorAll('[data-k]').forEach(e=>keep[e.dataset.k]=[e.value,e===document.activeElement]);
   $('#app').innerHTML=S?room():landing();
   for(const k in keep){const e=document.querySelector(`[data-k="${k}"]`);if(e){e.value=keep[k][0];keep[k][1]&&e.focus()}}
-  const q=$('#qr');if(q&&window.QRCode)new QRCode(q,{text:link(),width:200,height:200});else if(q)q.remove();
+  const q=$('#qr');if(q&&window.QRCode)new QRCode(q,{text:link(),width:ui.big?360:200,height:ui.big?360:200});else if(q)q.remove();
 }
 function landing(){const q=(new URLSearchParams(location.search).get('r')||'').toUpperCase();
-  return `<div class="card"><h1>🔁 RetroHub</h1><p class="mu">Retro games for teams of up to 15. Join from any phone or computer.</p>
+  return `<div class="card"><h1>🔁 ${esc(window.BRAND||'RetroHub')}</h1><p class="mu">Retro games for teams of up to 15. Join from any phone or computer.</p>
   <input data-k="nm" id="nm" placeholder="Your name" maxlength="20" autocomplete="nickname">
+  <input data-k="pw" id="pw" type="password" placeholder="Room password (optional)" maxlength="20">
   ${q?'':`<button class="pri" onclick="create()">Create a room</button><p class="mu">or join with a code</p>`}
   <input data-k="cd" id="cd" placeholder="Room code" value="${esc(q)}" maxlength="5" style="text-transform:uppercase">
   <button class="${q?'pri':''}" onclick="join()">Join room</button></div>`}
 function room(){const h=S.isHost;
-  return `<div class="top"><b>Room ${S.code}</b><span><button class="sm" onclick="ui.inv=!ui.inv;render()">Invite</button> <button class="sm" onclick="leave()">Leave</button></span></div>
-  ${ui.inv||(S.phase==='lobby'&&h)?`<div class="card center"><div id="qr"></div><div class="code">${S.code}</div><p class="mu">Scan, or open ${esc(link())}</p></div>`:''}
-  ${body()}<div class="ppl">${S.players.map(p=>`<span class="${p.on?'':'off'}">${p.emoji} ${esc(p.name)}${p.host?' ⭐':''}${p.done?' ✓':''}</span>`).join('')}</div>`}
+  return `<div class="top"><b>Room ${S.code}</b><span><button class="sm" onclick="ui.inv=!ui.inv;render()">Invite</button> <button class="sm" onclick="toggleTheme()" aria-label="Theme">🌓</button> <button class="sm" onclick="toggleMute()" aria-label="Sound">${mute?'🔇':'🔊'}</button> <button class="sm" onclick="leave()">Leave</button></span></div>
+  ${ui.inv||(S.phase==='lobby'&&h)?`<div class="card center"><div id="qr"></div><div class="code" style="font-size:${ui.big?'6rem':'3rem'}">${S.code}</div><p class="mu">Scan, or open ${esc(link())}${S.locked?' · 🔒 password':''}</p><button class="sm" onclick="ui.big=!ui.big;render()">${ui.big?'Smaller':'Present on screen'}</button></div>`:''}
+  ${body()}<div class="ppl">${S.players.map(p=>`<span class="${p.on?'':'off'}">${p.emoji} ${esc(p.name)}${p.host?' ⭐':''}${p.done?' ✓':''}${S.isHost&&!p.host?`<button class="x" title="Make host" onclick="if(confirm('Make this person the host?'))act('host',{id:'${p.id}'})">⭐</button><button class="x" title="Remove" onclick="if(confirm('Remove this person from the room?'))act('kick',{id:'${p.id}'})">✕</button>`:''}</span>`).join('')}</div>`}
 const bar2=(l,n,m)=>`<div class="row"><span>${esc(l)}</span><div class="track"><i style="width:${m?n/m*100:0}%"></i></div><b>${n}</b></div>`;
 const lb=(n=99)=>S.board.slice(0,n).map((p,i)=>`<div class="note"><span>${['🥇','🥈','🥉'][i]||(i+1)+'.'} ${p.emoji} ${esc(p.name)}</span><b>${p.score}</b></div>`).join('');
 const wait='<div class="card center"><p class="mu">Waiting for the facilitator…</p></div>';
-const host=l=>S.isHost?`<div class="bar"><button class="pri" onclick="act('next')">${l}</button></div>`:wait;
+const endGame=()=>confirm('End this game now and show results?')&&act('end'),toLobby=()=>confirm('Stop and pick another game?')&&act('lobby');
+const xtra='<button onclick="endGame()">⏹ End</button><button onclick="toLobby()">🎮 Games</button>';
+const host=l=>S.isHost?`<div class="bar"><button class="pri" onclick="act('next')">${l}</button>${xtra}</div>`:wait;
 const timer=()=>S.endsAt?'<span class="pill" id="timer"></span>':'';
-function body(){const g=S.game,h=S.isHost;
+const cardRes=x=>`<div class="note" style="flex-wrap:wrap"><span>${esc(x.text)}${x.by?`<small>— ${esc(x.by)}</small>`:''}</span><span class="dots">${x.votes?'● '+x.votes:''}</span><span class="chips">${['👍','❤️','😂','🤔'].map(e=>`<button class="sm" onclick="act('react',{id:'${x.id}',e:'${e}'})" style="${x.re[e]&&x.re[e].me?'outline:2px solid var(--hi)':''}">${e}${x.re[e]?' '+x.re[e].n:''}</button>`).join('')}${S.isHost?`<button class="sm" onclick="ui.act={text:S.cards.find(c=>c.id==='${x.id}').text};render()">➕ Action</button>`:''}</span></div>`;
+const actionsCard=()=>{const h=S.isHost;
+  const fm=ui.act?`<div class="card"><b>New action item</b><textarea data-k="at" id="at" rows="2" maxlength="200">${esc(ui.act.text||'')}</textarea><select data-k="ao" id="ao"><option value="">No owner</option>${S.players.map(p=>`<option>${esc(p.name)}</option>`).join('')}</select><input data-k="ad" id="ad" placeholder="Due (e.g. next sprint, 12 Nov)" maxlength="20"><button class="pri" onclick="saveAct()">Add action</button><button onclick="ui.act=null;render()">Cancel</button></div>`:'';
+  return fm+`<div class="card"><b>Action items</b>${S.actions.map(a=>`<div class="note"><span>${h?`<input type="checkbox" style="width:auto" ${a.done?'checked':''} onchange="act('adone',{id:'${a.id}'})"> `:a.done?'✅ ':''}${esc(a.text)}<small>${esc(a.owner||'No owner')}${a.due?' · due '+esc(a.due):''}</small></span>${h?`<button class="x" aria-label="Delete" onclick="act('adel',{id:'${a.id}'})">✕</button>`:''}</div>`).join('')||'<p class="mu">No action items yet.</p>'}${h?`<button onclick="ui.act={text:''};render()">➕ Add action item</button>`:''}${S.logN?`<div class="chips"><button onclick="dl()">⬇️ Download notes</button><button onclick="cp()">📋 Copy notes</button>${h&&S.slack?'<button onclick="slack()">Send to Slack</button>':''}</div>`:''}</div>`};
+const lobbyExtras=()=>(S.total.length?`<div class="card"><b>🏆 Session leaderboard</b>${S.total.map((p,i)=>`<div class="note"><span>${['🥇','🥈','🥉'][i]||(i+1)+'.'} ${p.emoji} ${esc(p.name)}</span><b>${p.score}</b></div>`).join('')}</div>`:'')+(S.isHost?`<div class="card"><b>🛠️ Build your own quiz</b><input data-k="cqt" id="cqt" placeholder="Quiz title" maxlength="20"><textarea data-k="cql" id="cql" rows="4" placeholder="One question per line:&#10;Question | correct answer | wrong | wrong | wrong"></textarea><button onclick="mkQuiz()">Create quiz</button></div>`:'')+actionsCard();
+function body(){return(S.phase==='lobby'&&S.isHost?`<div class="card"><h2>Run a ready-made agenda</h2><div class="chips">${S.agendas.map(a=>`<button class="chip" onclick="act('agenda',{i:${a.i}})">${esc(a.name)} (${a.n})</button>`).join('')}</div></div>`:'')+body0()+(S.phase==='lobby'?lobbyExtras():S.phase==='results'?actionsCard():'')}
+function body0(){const g=S.game,h=S.isHost;
   if(S.phase==='lobby'){if(!h)return wait;const cats=['All',...new Set(S.list.map(x=>x.cat))];
     return `<div class="card"><h2>Pick a game (${S.list.length})</h2><div class="chips">${cats.map(c=>`<button class="chip ${ui.cat===c?'on':''}" onclick="ui.cat='${c}';render()">${c}</button>`).join('')}</div>
     <div class="grid">${S.list.filter(x=>ui.cat==='All'||x.cat===ui.cat).map(x=>`<button class="g" onclick="act('pick',{id:'${x.id}'})"><b>${esc(x.title)}</b><small>${esc(x.desc)}</small></button>`).join('')}</div></div>`}
-  if(S.phase==='ready')return `<div class="card"><h2>${esc(g.title)}</h2><p>${esc(g.desc)}</p><p class="mu">${esc(g.prompt||(g.qs?g.qs.join(', '):g.n+' rounds'))}</p>${h?
+  if(S.phase==='ready')return `<div class="card"><h2>${esc(g.title)}</h2>${S.agenda?`<span class="pill">${esc(S.agenda.name)}: step ${S.agenda.pos+1}/${S.agenda.n}</span>`:''}<p>${esc(g.desc)}</p><p class="mu">${esc(g.prompt||(g.qs?g.qs.join(', '):g.n+' rounds'))}</p>${h?
     `<label class="mu">Timer <select onchange="ui.secs=+this.value"><option value="0">None</option>${[3,5,10].map(m=>`<option value="${m*60}" ${ui.secs==m*60?'selected':''}>${m} min</option>`).join('')}</select></label>
-    <button class="pri" onclick="act('start',{secs:ui.secs})">Start game</button><button onclick="act('lobby')">Pick another game</button>`:'<p class="mu">Get ready…</p>'}</div>`;
+    ${g.type==='text'?`<label class="mu"><input type="checkbox" style="width:auto" ${ui.anon===false?'':'checked'} onchange="ui.anon=this.checked"> Anonymous cards</label>`:''}<button class="pri" onclick="act('start',{secs:ui.secs,anon:ui.anon!==false})">Start game</button><button onclick="act('lobby')">Pick another game</button>`:'<p class="mu">Get ready…</p>'}</div>`;
   if(S.phase==='collect'){
+    if(g.type==='tl'){const m=S.myTl,L=ui.lie??(m?m.lie:2);return `<div class="card"><h2>${esc(g.title)}</h2><p>${esc(g.prompt)}</p>${timer()}${[0,1,2].map(i=>`<label class="mu"><input type="radio" style="width:auto" name="lie" ${L===i?'checked':''} onchange="ui.lie=${i}"> This one is the lie</label><input data-k="t${i}" id="t${i}" maxlength="100" placeholder="Statement ${i+1}" value="${m?esc(m.s[i]):''}">`).join('')}<button class="pri" onclick="sendTl()">${m?'Update':'Submit'}</button>${m?'<p class="mu">✓ Submitted. You can still change it.</p>':''}</div>${host('Start guessing')}`}
     if(g.type==='text')return `<div class="card"><h2>${esc(g.title)}</h2><p>${esc(g.prompt)}</p>${timer()}
       ${g.cols?`<div class="chips">${g.cols.map((c,i)=>`<button class="chip ${ui.col===i?'on':''}" onclick="ui.col=${i};render()">${esc(c)}</button>`).join('')}</div>`:''}
       <textarea data-k="tx" id="tx" rows="2" maxlength="200" placeholder="Type an idea. Cards are anonymous."></textarea><button class="pri" onclick="add()">Add card</button></div>
-      <div class="card"><b>Your cards</b>${S.mine.map(c=>`<div class="note"><span>${g.cols?`<small>${esc(g.cols[c.col])}</small>`:''}${esc(c.text)}</span><button class="x" aria-label="Delete" onclick="act('del',{id:'${c.id}'})">✕</button></div>`).join('')||'<p class="mu">No cards yet.</p>'}</div>${host('Start voting')}`;
+      <div class="card"><b>Your cards</b>${S.mine.map(c=>`<div class="note"><span>${g.cols?`<small>${esc(g.cols[c.col])}</small>`:''}${esc(c.text)}</span><span><button class="x" aria-label="Edit" onclick="editCard('${c.id}')">✎</button><button class="x" aria-label="Delete" onclick="act('del',{id:'${c.id}'})">✕</button></span></div>`).join('')||'<p class="mu">No cards yet.</p>'}</div>${host('Start voting')}`;
     if(g.type==='scale')return `<div class="card"><h2>${esc(g.title)}</h2>${timer()}</div>${g.qs.map((q,i)=>`<div class="card"><b>${esc(q)}</b><div class="scale">${[...Array(g.max)].map((_,k)=>`<button class="n ${(S.myAns||[])[i]===k+1?'on':''}" onclick="act('rate',{q:${i},v:${k+1}})">${k+1}</button>`).join('')}</div><div class="between mu"><span>${g.lo}</span><span>${g.hi}</span></div></div>`).join('')}${host('Reveal results')}`;
     return `<div class="card"><h2>${esc(g.title)}</h2><p>${esc(g.prompt)}</p>${timer()}${g.opts.map((o,i)=>`<button class="opt ${S.myAns===i?'on':''}" onclick="act('choose',{i:${i}})">${esc(o)}</button>`).join('')}</div>${host('Reveal results')}`}
   if(S.phase==='play'){const d=S.rd,q=g.type==='quiz',m=Math.max(1,...(d.c||[0])),ans=S.players.filter(p=>p.done).length;
     return `<div class="card"><div class="between mu"><span>${esc(g.title)}</span><span>Round ${d.i+1}/${d.n}</span></div><h2>${esc(d.q)}</h2>${timer()}
-    ${d.show?d.o.map((o,i)=>bar2((q&&i===d.a?'✅ ':'')+(d.my===i?'👉 ':'')+o,d.c[i],m)).join(''):d.o.map((o,i)=>`<button class="opt ${d.my===i?'on':''}" ${q&&d.my!=null?'disabled':''} onclick="act('answer',{c:${i}})">${esc(o)}</button>`).join('')}
+    ${d.show?d.o.map((o,i)=>bar2((q&&i===d.a?'✅ ':'')+(d.my===i?'👉 ':'')+o,d.c[i],m)).join(''):d.mine?'<p class="mu">This round is about you. Wait for the guesses.</p>':d.o.map((o,i)=>`<button class="opt ${d.my===i?'on':''}" ${q&&d.my!=null?'disabled':''} onclick="act('answer',{c:${i}})">${esc(o)}</button>`).join('')}
     <p class="mu">${ans}/${S.players.length} answered</p></div>
     ${d.show&&S.board?`<div class="card"><b>Leaderboard</b>${lb(5)}</div>`:''}
-    ${S.isHost?`<div class="bar"><button class="pri" onclick="act('next')">${d.show?(d.i+1>=d.n?'Final results':'Next round'):(q?'Reveal answer':'Show results')}</button></div>`:wait}`}
+    ${S.isHost?`<div class="bar"><button class="pri" onclick="act('next')">${d.show?(d.i+1>=d.n?'Final results':'Next round'):(q?'Reveal answer':'Show results')}</button>${xtra}</div>`:wait}`}
   if(S.phase==='vote')return `<div class="card"><h2>Vote</h2><p>Tap cards you want to discuss. <b>${S.left}</b> of 3 dots left.</p></div>
-    ${(g.cols||['']).map((c,i)=>{const k=S.cards.filter(x=>x.col===i);return k.length?`<div class="card">${c?`<b>${esc(c)}</b>`:''}${k.map(x=>`<button class="note vote ${x.mine?'on':''}" onclick="act('vote',{id:'${x.id}'})">${esc(x.text)}${x.mine?'<span class="dots">●</span>':''}</button>`).join('')}</div>`:''}).join('')}${host('Show results')}`;
+    ${(g.cols||['']).map((c,i)=>{const k=S.cards.filter(x=>x.col===i);return k.length?`<div class="card">${c?`<b>${esc(c)}</b>`:''}${k.map(x=>`<button class="note vote ${x.mine?'on':''}" onclick="act('vote',{id:'${x.id}'})"><span>${esc(x.text)}${x.by?`<small>— ${esc(x.by)}</small>`:''}</span>${x.mine?'<span class="dots">●</span>':''}</button>`).join('')}</div>`:''}).join('')}${host('Show results')}`;
   const bar=(l,n,m)=>`<div class="row"><span>${esc(l)}</span><div class="track"><i style="width:${m?n/m*100:0}%"></i></div><b>${n}</b></div>`;
   let r='';
-  if(g.type==='text')r=(g.cols||['']).map((c,i)=>`<div class="card">${c?`<b>${esc(c)}</b>`:''}${S.cards.filter(x=>x.col===i).map(x=>`<div class="note"><span>${esc(x.text)}</span><span class="dots">${x.votes?'● '+x.votes:''}</span></div>`).join('')||'<p class="mu">No cards.</p>'}</div>`).join('');
+  if(g.type==='text')r=(g.cols||['']).map((c,i)=>`<div class="card">${c?`<b>${esc(c)}</b>`:''}${S.cards.filter(x=>x.col===i).map(cardRes).join('')||'<p class="mu">No cards.</p>'}</div>`).join('');
   else if(g.type==='scale')r=g.qs.map((q,i)=>{const x=S.res[i],m=Math.max(...x.dist);return `<div class="card"><b>${esc(q)}</b><div class="avg">${x.avg.toFixed(1)} <small class="mu" style="font-size:1rem">avg · ${x.n} votes</small></div>${x.dist.map((n,k)=>bar(k+1,n,m)).join('')}</div>`}).join('');
   else if(g.n)r=S.board?`<div class="card"><b>Leaderboard</b>${lb()}</div>`:S.sum.map(x=>`<div class="card"><b>${esc(x.q)}</b>${x.o.map((o,i)=>bar2(o,x.c[i],Math.max(...x.c))).join('')}</div>`).join('');
   else{const m=Math.max(...S.res);r=`<div class="card">${g.opts.map((o,i)=>bar(o,S.res[i],m)).join('')}</div>`}
-  return `<div class="card"><h2>${esc(g.title)}: results</h2></div>${r}${h?`<div class="bar"><button class="pri" onclick="act('lobby')">Back to games</button></div>`:wait}`}
+  const dc=S.disc?`<div class="card center"><b>Discuss ${S.disc.i+1}/${S.disc.n}</b>${timer()}<h2>${esc(S.disc.card.text)}</h2>${h?`<div class="chips"><button onclick="act('dmore')">+2 min</button><button class="pri" onclick="act('dnext')">Next topic</button><button onclick="act('dstop')">Stop</button></div>`:''}</div>`:'',nx=S.agenda&&S.agenda.next,tx=g.type==='text'&&!S.disc&&S.cards&&S.cards.length;
+  return `<div class="card"><h2>${esc(g.title)}: results</h2></div>${dc}${r}${h?`<div class="bar">${nx?`<button class="pri" onclick="act('nextgame')">Next: ${esc(nx)}</button>`:''}${tx?`<button class="${nx?'':'pri'}" onclick="act('discuss')">💬 Discuss top cards</button>`:''}<button class="${nx||tx?'':'pri'}" onclick="act('lobby')">Back to games</button></div>`:wait}`}
 setInterval(()=>{const t=$('#timer');if(t&&S&&S.endsAt){const s=Math.max(0,Math.round((S.endsAt-Date.now())/1e3));t.textContent='⏱ '+Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}},500);
 render();ses&&connect();
 </script></body></html>
