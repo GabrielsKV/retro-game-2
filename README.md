@@ -1,6 +1,6 @@
 # RetroHub
 
-Real-time retro and team games for Scrum Masters. Up to 15 people join from any phone or computer by QR code, link or room code, on any network. 56 games, zero dependencies (plain Node.js + Server-Sent Events).
+Real-time retro and team games for Scrum Masters. Up to 15 people join from any phone or computer by QR code, link or room code, on any network. 61 games, zero dependencies (plain Node.js + Server-Sent Events).
 
 ## Run locally
     node server.js        # http://localhost:8080
@@ -27,6 +27,14 @@ Rooms are saved to `/data/rooms.json`. Players reconnect automatically after a r
 
 ## Features
 Agendas, action items with owners, Markdown export, discuss timer, card editing and reactions, anonymous or named cards, kick / make host, room password, custom quiz builder, session leaderboard, Two Truths and a Lie, present mode, light/dark theme, sound and confetti.
+
+## Security
+- Room codes are 6 characters; player tokens are 128-bit random secrets and are never shown to other players.
+- Room and team passwords are stored salted and hashed (scrypt), compared in constant time.
+- Rate limits per IP (room creation, joins, password attempts, requests), connection and size limits, request timeouts.
+- Strict headers: Content-Security-Policy, HSTS, no framing, no sniffing; cross-site requests are rejected.
+- Team trends are tied to the team password, so another team cannot read your history.
+- All user text is escaped before display. Do not put confidential data in a retro: this is a casual team tool, not a hardened enterprise system.
 
 ## Add games
 Edit `games.js`: `T` (cards + dot voting), `S` (rating scale), `C` (pick one), `R` (quiz, poll or who-is-most-likely rounds).

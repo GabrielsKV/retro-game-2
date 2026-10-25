@@ -36,21 +36,23 @@ input,textarea{width:100%;background:var(--bg);border:1px solid var(--bd);border
 :root[data-theme=light]{--bg:#f1f3ee;--card:#fff;--tx:#14201f;--mu:#5d6b69;--ac:#0f766e;--on:#fff;--bd:#d9dfd8;--soft:#e3efec}
 .cf{position:fixed;top:-2rem;font-size:1.8rem;animation:fall 2.6s linear forwards;pointer-events:none}@keyframes fall{to{transform:translateY(110vh) rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.cf{display:none}}select{background:var(--bg);border:1px solid var(--bd);border-radius:10px;padding:9px;width:100%}
+.race{width:100%;min-height:40vh;font:800 2.2rem 'Bricolage Grotesque',sans-serif;border:0;border-radius:18px;color:#fff;touch-action:manipulation}
+.race.wait{background:#c2410c}.race.go{background:#16a34a}.race.bad{background:#7f1d1d}.race.done{background:var(--ac);color:var(--on)}
 </style></head><body><div id="app"></div>
 <script>
 const $=s=>document.querySelector(s),esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let S=null,es,ses=JSON.parse(localStorage.getItem('retro')||'null');const ui={cat:'All',secs:300,col:0,inv:false,big:false,act:null};document.documentElement.dataset.theme=localStorage.getItem('theme')||'';let mute=localStorage.getItem('mute')==='1';
+let S=null,es,ses=JSON.parse(localStorage.getItem('retro')||'null');const ui={cat:'All',secs:300,col:0,inv:false,big:false,act:null};document.documentElement.dataset.theme=localStorage.getItem('theme')||'';let dkey='',curS=null,qq=Promise.resolve();let mute=localStorage.getItem('mute')==='1';
 const post=async(u,b)=>{const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||'Something went wrong');return j};
 const act=(a,o={})=>post('/api/act',{code:ses.code,pid:ses.pid,a,...o}).catch(e=>alert(e.message));
 const save=()=>{localStorage.setItem('retro',JSON.stringify(ses));connect()};
-async function create(){try{const n=$('#nm').value;const j=await post('/api/room',{name:n,pw:$('#pw').value});ses=j;save()}catch(e){alert(e.message)}}
+async function create(){try{const n=$('#nm').value;const j=await post('/api/room',{name:n,pw:$('#pw').value,team:$('#tm')?$('#tm').value:''});ses=j;save()}catch(e){alert(e.message)}}
 async function join(){try{const code=$('#cd').value.trim().toUpperCase();const j=await post('/api/join',{code,name:$('#nm').value,pw:$('#pw').value,pid:ses&&ses.code===code?ses.pid:undefined});ses={code,pid:j.pid};history.replaceState(0,'','/');save()}catch(e){alert(e.message)}}
 function connect(){es&&es.close();es=new EventSource(`/api/events?code=${ses.code}&pid=${ses.pid}`);es.onmessage=e=>{const d=JSON.parse(e.data);if(d.kicked){alert('You were removed from the room.');return leave()}const p=S;S=d;fx(p,d);render()};
   es.onerror=async()=>{const r=await fetch('/api/room?code='+ses.code).catch(()=>null);if(r&&r.status===404)leave()}}
 function leave(){es&&es.close();localStorage.removeItem('retro');ses=S=null;render()}
 const beep=(f,t=.2)=>{if(mute)return;try{const a=new(window.AudioContext||window.webkitAudioContext)(),o=a.createOscillator(),g=a.createGain();o.frequency.value=f;g.gain.value=.08;o.connect(g);g.connect(a.destination);o.start();o.stop(a.currentTime+t)}catch{}};
 const confetti=()=>{const E=['🎉','🎊','✨','⭐'];for(let i=0;i<40;i++){const s=document.createElement('span');s.className='cf';s.textContent=E[i%4];s.style.left=Math.random()*100+'vw';s.style.animationDelay=Math.random()+'s';document.body.appendChild(s);setTimeout(()=>s.remove(),4000)}};
-const fx=(p,d)=>{if(d.rd&&d.rd.show&&d.game.type==='quiz'&&!(p&&p.rd&&p.rd.show&&p.rd.i===d.rd.i))beep(d.rd.my===d.rd.a?880:220,.25);if(d.phase==='results'&&d.board&&(!p||p.phase!=='results'))confetti()};
+const fx=(p,d)=>{if(d.rd&&d.rd.show&&d.game.type==='quiz'&&!(p&&p.rd&&p.rd.show&&p.rd.i===d.rd.i))beep(d.rd.my===d.rd.a?880:220,.25);if(d.rc&&d.rc.st==='go'&&!(p&&p.rc&&p.rc.st==='go'))beep(660,.12);if(d.phase==='results'&&d.board&&(!p||p.phase!=='results'))confetti()};
 const toggleTheme=()=>{const cur=document.documentElement.dataset.theme||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'),n=cur==='dark'?'light':'dark';document.documentElement.dataset.theme=n;localStorage.setItem('theme',n)};
 const toggleMute=()=>{mute=!mute;localStorage.setItem('mute',mute?'1':'0');render()};
 const exp=async()=>(await fetch(`/api/export?code=${ses.code}&pid=${ses.pid}`)).text();
@@ -64,17 +66,20 @@ const sendTl=()=>act('tl',{s:[0,1,2].map(i=>$('#t'+i).value),lie:ui.lie??(S.myTl
 const link=()=>location.origin+'/?r='+S.code;
 const add=()=>{const t=$('#tx').value.trim();if(t){act('add',{col:ui.col,text:t});$('#tx').value=''}};
 function render(){
+  if(S&&S.phase==='draw'&&dkey&&dkey===dk()&&$('#cv')){updDraw();return}
   const keep={};document.querySelectorAll('[data-k]').forEach(e=>keep[e.dataset.k]=[e.value,e===document.activeElement]);
   $('#app').innerHTML=S?room():landing();
   for(const k in keep){const e=document.querySelector(`[data-k="${k}"]`);if(e){e.value=keep[k][0];keep[k][1]&&e.focus()}}
+  dkey=S&&S.phase==='draw'?dk():'';if(dkey)initCv();
   const q=$('#qr');if(q&&window.QRCode)new QRCode(q,{text:link(),width:ui.big?360:200,height:ui.big?360:200});else if(q)q.remove();
 }
 function landing(){const q=(new URLSearchParams(location.search).get('r')||'').toUpperCase();
   return `<div class="card"><h1>🔁 ${esc(window.BRAND||'RetroHub')}</h1><p class="mu">Retro games for teams of up to 15. Join from any phone or computer.</p>
   <input data-k="nm" id="nm" placeholder="Your name" maxlength="20" autocomplete="nickname">
   <input data-k="pw" id="pw" type="password" placeholder="Room password (optional)" maxlength="20">
+  ${q?'':'<input data-k="tm" id="tm" placeholder="Team name (optional, enables trends)" maxlength="20">'}
   ${q?'':`<button class="pri" onclick="create()">Create a room</button><p class="mu">or join with a code</p>`}
-  <input data-k="cd" id="cd" placeholder="Room code" value="${esc(q)}" maxlength="5" style="text-transform:uppercase">
+  <input data-k="cd" id="cd" placeholder="Room code" value="${esc(q)}" maxlength="6" style="text-transform:uppercase">
   <button class="${q?'pri':''}" onclick="join()">Join room</button></div>`}
 function room(){const h=S.isHost;
   return `<div class="top"><b>Room ${S.code}</b><span><button class="sm" onclick="ui.inv=!ui.inv;render()">Invite</button> <button class="sm" onclick="toggleTheme()" aria-label="Theme">🌓</button> <button class="sm" onclick="toggleMute()" aria-label="Sound">${mute?'🔇':'🔊'}</button> <button class="sm" onclick="leave()">Leave</button></span></div>
@@ -87,11 +92,44 @@ const endGame=()=>confirm('End this game now and show results?')&&act('end'),toL
 const xtra='<button onclick="endGame()">⏹ End</button><button onclick="toLobby()">🎮 Games</button>';
 const host=l=>S.isHost?`<div class="bar"><button class="pri" onclick="act('next')">${l}</button>${xtra}</div>`:wait;
 const timer=()=>S.endsAt?'<span class="pill" id="timer"></span>':'';
-const cardRes=x=>`<div class="note" style="flex-wrap:wrap"><span>${esc(x.text)}${x.by?`<small>— ${esc(x.by)}</small>`:''}</span><span class="dots">${x.votes?'● '+x.votes:''}</span><span class="chips">${['👍','❤️','😂','🤔'].map(e=>`<button class="sm" onclick="act('react',{id:'${x.id}',e:'${e}'})" style="${x.re[e]&&x.re[e].me?'outline:2px solid var(--hi)':''}">${e}${x.re[e]?' '+x.re[e].n:''}</button>`).join('')}${S.isHost?`<button class="sm" onclick="ui.act={text:S.cards.find(c=>c.id==='${x.id}').text};render()">➕ Action</button>`:''}</span></div>`;
+const gcl=id=>{if(!ui.gsel)ui.gsel=id;else if(ui.gsel===id)ui.gsel=null;else{act('merge',{from:ui.gsel,to:id});ui.gsel=null}render()};
+const spark=s=>{const w=260,h=60,p=s.pts,x=i=>p.length>1?8+i*(w-16)/(p.length-1):w/2,y=v=>h-6-(v-1)/Math.max(1,s.max-1)*(h-12);return `<svg viewBox="0 0 ${w} ${h}" width="100%" style="max-width:300px"><polyline fill="none" stroke="var(--ac)" stroke-width="2" points="${p.map((q,i)=>x(i)+','+y(q.avg)).join(' ')}"/>${p.map((q,i)=>`<circle cx="${x(i)}" cy="${y(q.avg)}" r="3" fill="var(--ac)"/>`).join('')}</svg>`};
+const loadTr=async()=>{ui.tr=await fetch(`/api/trends?code=${ses.code}&pid=${ses.pid}`).then(r=>r.json());render()};
+const trendsCard=()=>S.team?`<div class="card"><b>📈 Trends for ${esc(S.team)}</b>${ui.tr?(ui.tr.length?ui.tr.map(s=>{const l=s.pts[s.pts.length-1].avg,p=s.pts.length>1?s.pts[s.pts.length-2].avg:null,d=p==null?'':l>p?' ▲':l<p?' ▼':' ▬';return `<div class="note" style="display:block"><b>${esc(s.title)}</b> <span class="mu">${esc(s.q)}</span><div class="avg" style="font-size:1.4rem">${l.toFixed(1)}/${s.max}${d} <small class="mu" style="font-size:.9rem">${s.pts.length} retros</small></div>${spark(s)}</div>`}).join(''):'<p class="mu">No data yet. Play a rating game (ROTI, Happiness, Team Health) to start tracking.</p>'):'<button onclick="loadTr()">Show trends</button>'}</div>`:(S.isHost?'<div class="card"><p class="mu">📈 Want trends across sprints? Create the room with a team name.</p></div>':'');
+const raceUI=()=>{const d=S.rc,h=S.isHost,g=S.game,m=d.my;
+  const big=(cl,t,on)=>`<button class="race ${cl}" ${on?'onpointerdown="act(\'tap\')"':'disabled'}>${t}</button>`;
+  const pad=d.st==='wait'?(m==='bad'?big('bad','Too early ❌',0):big('wait','Wait for green…',1)):d.st==='go'?(m!=null?big('done',Math.round(m)+' ms ✅',0):big('go','TAP!',1)):d.st==='done'?'':`<p class="mu">Get ready for round ${Math.min(d.i+1,d.n)}.</p>`;
+  const tbl=d.st==='done'?d.res.map(p=>`<div class="note"><span>${esc(p.name)}</span><b>${p.none?'no tap':p.bad?'too early':p.ms+' ms'}${p.pts?' · +'+p.pts:''}</b></div>`).join(''):'';
+  const bar=h?`<div class="bar">${(d.st==='idle'||d.st==='done')&&d.i<d.n?`<button class="pri" onclick="act('rgo')">Start round ${d.i+1}/${d.n}</button>`:d.st==='done'?'<button class="pri" onclick="act(\'next\')">Final results</button>':'<button class="pri" onclick="act(\'rend\')">End round</button>'}${xtra}</div>`:wait;
+  return `<div class="card center"><h2>${esc(g.title)}</h2><div class="mu">Round ${d.i}/${d.n}</div>${pad}</div>${tbl?`<div class="card">${tbl}</div>`:''}<div class="card"><b>Leaderboard</b>${lb(5)}</div>${bar}`};
+const bingoUI=()=>{const b=S.bg;return `<div class="card"><h2>${esc(S.game.title)}</h2><p class="mu">Tap squares as they happen. Complete a row, column or diagonal, then press BINGO.</p><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">${b.cells.map((t,i)=>`<button class="opt ${b.marks[i]?'on':''}" style="padding:6px;min-height:76px;font-size:.78rem;text-align:center" onclick="act('mark',{i:${i}})">${esc(t)}</button>`).join('')}</div>${b.won?'<p class="pill">🎉 You called BINGO!</p>':'<button class="pri" onclick="act(\'bingo\')">BINGO!</button>'}${b.winners.length?`<p>Winners: ${b.winners.map(esc).join(', ')}</p>`:''}</div>${host('Finish game')}`};
+const dk=()=>[S.game.id,S.dr.i,S.dr.st,S.dr.me,S.isHost].join();
+const chat=()=>S.dr.chat.map(m=>m.ok?`<div>✅ <b>${esc(m.n)}</b> guessed it!</div>`:`<div><b>${esc(m.n)}:</b> ${esc(m.t)}</div>`).join('')||'<span class="mu">Guesses appear here.</span>';
+const seg=(x,a,b,cl,w)=>{x.strokeStyle=cl;x.lineWidth=w;x.lineCap='round';x.lineJoin='round';x.beginPath();x.moveTo(a[0],a[1]);x.lineTo(b[0],b[1]);x.stroke()};
+const paint=()=>{const cv=$('#cv');if(!cv)return;const x=cv.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,1000,700);for(const s of S.dr.strokes){const p=s.p;if(p.length===1){x.fillStyle=s.c;x.beginPath();x.arc(p[0][0],p[0][1],s.w/2,0,7);x.fill()}for(let i=1;i<p.length;i++)seg(x,p[i-1],p[i],s.c,s.w)}};
+const updDraw=()=>{if(!curS)paint();const ch=$('#dchat');if(ch){ch.innerHTML=chat();ch.scrollTop=1e9}const sc=$('#dscore');if(sc)sc.innerHTML=lb(6)};
+const setPen=c=>{ui.pc=c;const e=$('#pen');if(e){e.style.background=c;e.textContent=c==='#ffffff'?'eraser':''}};
+const guess=()=>{const e=$('#gs');if(e&&e.value.trim()){act('guess',{text:e.value});e.value=''}};
+function initCv(){const cv=$('#cv');if(!cv)return;paint();if(!S.dr.me||S.dr.st!=='draw')return;
+  const pt=e=>{const r=cv.getBoundingClientRect();return[Math.round((e.clientX-r.left)/r.width*1000),Math.round((e.clientY-r.top)/r.height*700)]},pw=()=>(ui.pc||'#111111')==='#ffffff'?30:(ui.pw0||6);let sent=0,tm;
+  const flush=()=>{if(!curS)return;const p=curS.p.slice(sent);if(!p.length&&!curS.nw)return;const o={c:curS.c,w:curS.w,p,new:curS.nw};curS.nw=false;sent=curS.p.length;qq=qq.then(()=>act('pts',o))};
+  cv.onpointerdown=e=>{cv.setPointerCapture(e.pointerId);const p=pt(e);curS={c:ui.pc||'#111111',w:pw(),p:[p],nw:true};sent=0;const x=cv.getContext('2d');x.fillStyle=curS.c;x.beginPath();x.arc(p[0],p[1],curS.w/2,0,7);x.fill();tm=setInterval(flush,120)};
+  cv.onpointermove=e=>{if(!curS)return;const p=pt(e),l=curS.p[curS.p.length-1];curS.p.push(p);seg(cv.getContext('2d'),l,p,curS.c,curS.w)};
+  cv.onpointerup=cv.onpointercancel=()=>{if(!curS)return;flush();clearInterval(tm);qq=qq.then(()=>{curS=null})}}
+const drawUI=()=>{const d=S.dr,h=S.isHost,me=d.me,pal=['#111111','#e11d48','#2563eb','#16a34a','#f59e0b','#ffffff'];
+  const tools=me&&d.st==='draw'?`<div class="chips" style="align-items:center">${pal.map(cl=>`<button class="chip" style="background:${cl};width:34px;height:34px;padding:0" aria-label="Color ${cl}" onclick="setPen('${cl}')"></button>`).join('')}<span id="pen" class="pill" style="background:${ui.pc||'#111111'};color:#888">&nbsp;&nbsp;</span><button class="sm" onclick="ui.pw0=4">Thin</button><button class="sm" onclick="ui.pw0=9">Medium</button><button class="sm" onclick="ui.pw0=16">Thick</button><button class="sm" onclick="act('dundo')">↶ Undo</button><button class="sm" onclick="act('dclear')">🗑️ Clear</button></div>`:'';
+  const status=d.word&&me&&d.st==='draw'?`Draw: <b>${esc(d.word)}</b>`:d.word?`The word was <b>${esc(d.word)}</b>`:`Hint: <b>${esc(d.hint)}</b>`;
+  return `<div class="card"><div class="between mu"><span>${esc(S.game.title)}</span><span>Turn ${d.i+1}/${d.n}</span></div><div class="between"><span>🖌️ ${esc(d.drawer)}${me?' (you)':''}</span>${timer()}</div><p>${status}</p>
+  <canvas id="cv" width="1000" height="700" style="width:100%;background:#fff;border-radius:10px;border:1px solid var(--bd);touch-action:none"></canvas>${tools}
+  <div id="dchat" class="note" style="display:block;max-height:130px;overflow:auto">${chat()}</div>
+  ${!me&&d.st==='draw'&&!d.solved?'<div class="chips"><input data-k="gs" id="gs" placeholder="Your guess" maxlength="30" style="flex:1" onkeydown="if(event.key===\'Enter\')guess()"><button class="pri" onclick="guess()">Guess</button></div>':d.solved&&d.st==='draw'?'<p class="pill">✅ You got it!</p>':''}</div>
+  <div class="card"><b>Scores</b><div id="dscore">${lb(6)}</div></div>
+  ${h?`<div class="bar"><button class="pri" onclick="act('next')">${d.st==='draw'?'Reveal word':d.i+1>=d.n?'Final results':'Next drawer'}</button>${xtra}</div>`:wait}`};
+const cardRes=x=>`<div class="note" style="flex-wrap:wrap"><span>${esc(x.text)}${(x.more||[]).map(m=>`<small>+ ${esc(m)}</small>`).join('')}${x.by?`<small>— ${esc(x.by)}</small>`:''}</span><span class="dots">${x.votes?'● '+x.votes:''}</span><span class="chips">${['👍','❤️','😂','🤔'].map(e=>`<button class="sm" onclick="act('react',{id:'${x.id}',e:'${e}'})" style="${x.re[e]&&x.re[e].me?'outline:2px solid var(--hi)':''}">${e}${x.re[e]?' '+x.re[e].n:''}</button>`).join('')}${S.isHost?`<button class="sm" onclick="ui.act={text:S.cards.find(c=>c.id==='${x.id}').text};render()">➕ Action</button>`:''}</span></div>`;
 const actionsCard=()=>{const h=S.isHost;
   const fm=ui.act?`<div class="card"><b>New action item</b><textarea data-k="at" id="at" rows="2" maxlength="200">${esc(ui.act.text||'')}</textarea><select data-k="ao" id="ao"><option value="">No owner</option>${S.players.map(p=>`<option>${esc(p.name)}</option>`).join('')}</select><input data-k="ad" id="ad" placeholder="Due (e.g. next sprint, 12 Nov)" maxlength="20"><button class="pri" onclick="saveAct()">Add action</button><button onclick="ui.act=null;render()">Cancel</button></div>`:'';
   return fm+`<div class="card"><b>Action items</b>${S.actions.map(a=>`<div class="note"><span>${h?`<input type="checkbox" style="width:auto" ${a.done?'checked':''} onchange="act('adone',{id:'${a.id}'})"> `:a.done?'✅ ':''}${esc(a.text)}<small>${esc(a.owner||'No owner')}${a.due?' · due '+esc(a.due):''}</small></span>${h?`<button class="x" aria-label="Delete" onclick="act('adel',{id:'${a.id}'})">✕</button>`:''}</div>`).join('')||'<p class="mu">No action items yet.</p>'}${h?`<button onclick="ui.act={text:''};render()">➕ Add action item</button>`:''}${S.logN?`<div class="chips"><button onclick="dl()">⬇️ Download notes</button><button onclick="cp()">📋 Copy notes</button>${h&&S.slack?'<button onclick="slack()">Send to Slack</button>':''}</div>`:''}</div>`};
-const lobbyExtras=()=>(S.total.length?`<div class="card"><b>🏆 Session leaderboard</b>${S.total.map((p,i)=>`<div class="note"><span>${['🥇','🥈','🥉'][i]||(i+1)+'.'} ${p.emoji} ${esc(p.name)}</span><b>${p.score}</b></div>`).join('')}</div>`:'')+(S.isHost?`<div class="card"><b>🛠️ Build your own quiz</b><input data-k="cqt" id="cqt" placeholder="Quiz title" maxlength="20"><textarea data-k="cql" id="cql" rows="4" placeholder="One question per line:&#10;Question | correct answer | wrong | wrong | wrong"></textarea><button onclick="mkQuiz()">Create quiz</button></div>`:'')+actionsCard();
+const lobbyExtras=()=>(S.total.length?`<div class="card"><b>🏆 Session leaderboard</b>${S.total.map((p,i)=>`<div class="note"><span>${['🥇','🥈','🥉'][i]||(i+1)+'.'} ${p.emoji} ${esc(p.name)}</span><b>${p.score}</b></div>`).join('')}</div>`:'')+(S.isHost?`<div class="card"><b>🛠️ Build your own quiz</b><input data-k="cqt" id="cqt" placeholder="Quiz title" maxlength="20"><textarea data-k="cql" id="cql" rows="4" placeholder="One question per line:&#10;Question | correct answer | wrong | wrong | wrong"></textarea><button onclick="mkQuiz()">Create quiz</button></div>`:'')+trendsCard()+actionsCard();
 function body(){return(S.phase==='lobby'&&S.isHost?`<div class="card"><h2>Run a ready-made agenda</h2><div class="chips">${S.agendas.map(a=>`<button class="chip" onclick="act('agenda',{i:${a.i}})">${esc(a.name)} (${a.n})</button>`).join('')}</div></div>`:'')+body0()+(S.phase==='lobby'?lobbyExtras():S.phase==='results'?actionsCard():'')}
 function body0(){const g=S.game,h=S.isHost;
   if(S.phase==='lobby'){if(!h)return wait;const cats=['All',...new Set(S.list.map(x=>x.cat))];
@@ -114,15 +152,18 @@ function body0(){const g=S.game,h=S.isHost;
     <p class="mu">${ans}/${S.players.length} answered</p></div>
     ${d.show&&S.board?`<div class="card"><b>Leaderboard</b>${lb(5)}</div>`:''}
     ${S.isHost?`<div class="bar"><button class="pri" onclick="act('next')">${d.show?(d.i+1>=d.n?'Final results':'Next round'):(q?'Reveal answer':'Show results')}</button>${xtra}</div>`:wait}`}
-  if(S.phase==='vote')return `<div class="card"><h2>Vote</h2><p>Tap cards you want to discuss. <b>${S.left}</b> of 3 dots left.</p></div>
-    ${(g.cols||['']).map((c,i)=>{const k=S.cards.filter(x=>x.col===i);return k.length?`<div class="card">${c?`<b>${esc(c)}</b>`:''}${k.map(x=>`<button class="note vote ${x.mine?'on':''}" onclick="act('vote',{id:'${x.id}'})"><span>${esc(x.text)}${x.by?`<small>— ${esc(x.by)}</small>`:''}</span>${x.mine?'<span class="dots">●</span>':''}</button>`).join('')}</div>`:''}).join('')}${host('Show results')}`;
+  if(S.phase==='race')return raceUI();
+  if(S.phase==='bingo')return bingoUI();
+  if(S.phase==='draw')return drawUI();
+  if(S.phase==='vote')return `<div class="card"><h2>Vote</h2><p>Tap cards you want to discuss. <b>${S.left}</b> of 3 dots left.</p>${S.isHost?`<button class="${ui.grp?'pri':''}" onclick="ui.grp=!ui.grp;ui.gsel=null;render()">🔗 ${ui.grp?'Done grouping':'Group similar cards'}</button>${ui.grp?'<p class="mu">Tap a card, then tap the card to merge it into.</p>':''}`:''}</div>
+    ${(g.cols||['']).map((c,i)=>{const k=S.cards.filter(x=>x.col===i);return k.length?`<div class="card">${c?`<b>${esc(c)}</b>`:''}${k.map(x=>`<button class="note vote ${x.mine?'on':''}" onclick="${S.isHost&&ui.grp?`gcl('${x.id}')`:`act('vote',{id:'${x.id}'})`}" style="${ui.gsel===x.id?'outline:3px dashed var(--ac)':''}"><span>${esc(x.text)}${(x.more||[]).map(m=>`<small>+ ${esc(m)}</small>`).join('')}${S.isHost&&ui.grp&&x.more&&x.more.length?`<span onclick="event.stopPropagation();act('unmerge',{id:'${x.id}'})">✂️ split</span>`:''}${x.by?`<small>— ${esc(x.by)}</small>`:''}</span>${x.mine?'<span class="dots">●</span>':''}</button>`).join('')}</div>`:''}).join('')}${host('Show results')}`;
   const bar=(l,n,m)=>`<div class="row"><span>${esc(l)}</span><div class="track"><i style="width:${m?n/m*100:0}%"></i></div><b>${n}</b></div>`;
   let r='';
   if(g.type==='text')r=(g.cols||['']).map((c,i)=>`<div class="card">${c?`<b>${esc(c)}</b>`:''}${S.cards.filter(x=>x.col===i).map(cardRes).join('')||'<p class="mu">No cards.</p>'}</div>`).join('');
   else if(g.type==='scale')r=g.qs.map((q,i)=>{const x=S.res[i],m=Math.max(...x.dist);return `<div class="card"><b>${esc(q)}</b><div class="avg">${x.avg.toFixed(1)} <small class="mu" style="font-size:1rem">avg · ${x.n} votes</small></div>${x.dist.map((n,k)=>bar(k+1,n,m)).join('')}</div>`}).join('');
-  else if(g.n)r=S.board?`<div class="card"><b>Leaderboard</b>${lb()}</div>`:S.sum.map(x=>`<div class="card"><b>${esc(x.q)}</b>${x.o.map((o,i)=>bar2(o,x.c[i],Math.max(...x.c))).join('')}</div>`).join('');
+  else if(g.n||S.board)r=S.board?`<div class="card"><b>Leaderboard</b>${lb()}</div>`:S.sum.map(x=>`<div class="card"><b>${esc(x.q)}</b>${x.o.map((o,i)=>bar2(o,x.c[i],Math.max(...x.c))).join('')}</div>`).join('');
   else{const m=Math.max(...S.res);r=`<div class="card">${g.opts.map((o,i)=>bar(o,S.res[i],m)).join('')}</div>`}
-  const dc=S.disc?`<div class="card center"><b>Discuss ${S.disc.i+1}/${S.disc.n}</b>${timer()}<h2>${esc(S.disc.card.text)}</h2>${h?`<div class="chips"><button onclick="act('dmore')">+2 min</button><button class="pri" onclick="act('dnext')">Next topic</button><button onclick="act('dstop')">Stop</button></div>`:''}</div>`:'',nx=S.agenda&&S.agenda.next,tx=g.type==='text'&&!S.disc&&S.cards&&S.cards.length;
+  const dc=S.disc?`<div class="card center"><b>Discuss ${S.disc.i+1}/${S.disc.n}</b>${timer()}<h2>${esc(S.disc.card.text)}</h2>${(S.disc.card.more||[]).map(m=>`<p class="mu">+ ${esc(m)}</p>`).join('')}${h?`<div class="chips"><button onclick="act('dmore')">+2 min</button><button class="pri" onclick="act('dnext')">Next topic</button><button onclick="act('dstop')">Stop</button></div>`:''}</div>`:'',nx=S.agenda&&S.agenda.next,tx=g.type==='text'&&!S.disc&&S.cards&&S.cards.length;
   return `<div class="card"><h2>${esc(g.title)}: results</h2></div>${dc}${r}${h?`<div class="bar">${nx?`<button class="pri" onclick="act('nextgame')">Next: ${esc(nx)}</button>`:''}${tx?`<button class="${nx?'':'pri'}" onclick="act('discuss')">💬 Discuss top cards</button>`:''}<button class="${nx||tx?'':'pri'}" onclick="act('lobby')">Back to games</button></div>`:wait}`}
 setInterval(()=>{const t=$('#timer');if(t&&S&&S.endsAt){const s=Math.max(0,Math.round((S.endsAt-Date.now())/1e3));t.textContent='⏱ '+Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}},500);
 render();ses&&connect();
